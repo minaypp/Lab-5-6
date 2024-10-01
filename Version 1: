@@ -1,1 +1,268 @@
+import random
 
+# Game log to keep track of actions
+game_log = []
+
+
+def log_action(action):
+    game_log.append(action)
+    print(action)
+
+
+# Card Class
+class Card:
+    def __init__(self, name, description, cost):
+        self.name = name
+        self.description = description
+        self.cost = cost
+
+    def play(self, player):
+        pass  # To be implemented by subclasses
+
+    def __str__(self):
+        return f"{self.name}: {self.description} (Cost: {self.cost})"
+
+
+# CreatureCard Class
+class CreatureCard(Card):
+    def __init__(self, name, description, cost, attack, health):
+        super().__init__(name, description, cost)
+        self.attack = attack
+        self.health = health
+
+    def play(self, player):
+        log_action(f"{player.name} plays {self.name} ({self.attack}/{self.health})")
+        player.field.append(self)
+
+    def take_damage(self, damage):
+        self.health -= damage
+        if self.health <= 0:
+            log_action(f"{self.name} has been defeated.")
+
+    def __str__(self):
+        return f"{self.name} ({self.attack}/{self.health}): {self.description} (Cost: {self.cost})"
+
+
+# SpellCard Class
+class SpellCard(Card):
+    def __init__(self, name, description, cost, effect):
+        super().__init__(name, description, cost)
+        self.effect = effect
+
+    def play(self, player, target=None):
+        log_action(f"{player.name} plays {self.name} - {self.description}")
+        if self.effect:
+            self.effect(player, target)
+
+
+# Specific Spells
+def fireball(player, target):
+    if target:
+        log_action(f"Fireball hits {target.name}, dealing 5 damage!")
+        target.take_damage(5)
+
+
+def buff(player, target):
+    if target:
+        log_action(f"{target.name} gains +2/+2!")
+        target.attack += 2
+        target.health += 2
+
+
+def curse(player, target):
+    if target:
+        log_action(f"{target.name} is instantly destroyed!")
+        player.field.remove(target)
+
+
+def draw_cards(player, num):
+    log_action(f"{player.name} draws {num} cards.")
+    for _ in range(num):
+        player.draw_card()
+
+
+# Player Class
+class Player:
+    def __init__(self, name):
+        self.name = name
+        self.hp = 20
+        self.energy = 3
+        self.hand = []
+        self.deck = LinkedList()
+        self.field = []
+
+    def draw_card(self):
+        if not self.deck.is_empty():
+            card = self.deck.draw()
+            self.hand.append(card)
+            log_action(f"{self.name} draws a card: {card}")
+        else:
+            log_action(f"{self.name}'s deck is empty!")
+
+    def play_card(self):
+        if not self.hand:
+            print(f"{self.name} has no cards to play!")
+            return
+
+        self.display_hand()
+        card_index = get_valid_card_index(self)
+        card = self.hand[card_index]
+
+        if card.cost <= self.energy:
+            self.energy -= card.cost
+            if isinstance(card, CreatureCard):
+                card.play(self)
+            else:
+                # Spell cards require a target or additional input
+                self.play_spell(card)
+            self.hand.pop(card_index)
+        else:
+            log_action(f"{self.name} does not have enough energy to play {card.name}.")
+
+    def play_spell(self, card):
+        if isinstance(card, SpellCard):
+            if "target" in card.description:
+                target = self.choose_target()
+                card.play(self, target)
+            else:
+                card.play(self)
+
+    def end_turn(self):
+        self.energy = min(self.energy + 1, 7)
+
+    def display_hand(self):
+        print(f"{self.name}'s Hand:")
+        for i, card in enumerate(self.hand):
+            print(f"{i}: {card}")
+
+    def choose_target(self):
+        if not self.field:
+            print(f"No valid targets for {self.name}")
+            return None
+
+        for i, card in enumerate(self.field):
+            print(f"{i}: {card}")
+        index = int(input("Choose a target by index: "))
+        return self.field[index]
+
+
+# Input Validation Function
+def get_valid_card_index(player):
+    while True:
+        try:
+            index = int(input("Enter card index to play: "))
+            if 0 <= index < len(player.hand):
+                return index
+            else:
+                print("Invalid index. Try again.")
+        except ValueError:
+            print("Please enter a valid number.")
+
+
+# LinkedList Class
+class Node:
+    def __init__(self, card=None):
+        self.card = card
+        self.next = None
+
+
+class LinkedList:
+    def __init__(self):
+        self.head = None
+        self.size = 0
+
+    def add(self, card):
+        new_node = Node(card)
+        new_node.next = self.head
+        self.head = new_node
+        self.size += 1
+
+    def draw(self):
+        if self.head is None:
+            return None
+        drawn_card = self.head.card
+        self.head = self.head.next
+        self.size -= 1
+        return drawn_card
+
+    def is_empty(self):
+        return self.size == 0
+
+
+# Game Class
+class Game:
+    def __init__(self, player1, player2):
+        self.players = [player1, player2]
+        self.current_turn = 0
+
+    def roll_dice(self):
+        rolls = [random.randint(1, 6) for _ in self.players]
+        if rolls[0] > rolls[1]:
+            return 0
+        else:
+            return 1
+
+    def start_game(self):
+        print("Starting the game...")
+        first_player = self.roll_dice()
+        log_action(f"{self.players[first_player].name} goes first!")
+        self.current_turn = first_player
+        self.play_game()
+
+    def play_game(self):
+        while all(player.hp > 0 for player in self.players):
+            current_player = self.players[self.current_turn]
+            log_action(f"{current_player.name}'s turn:")
+            current_player.draw_card()
+            current_player.play_card()
+            current_player.end_turn()
+
+            # Check win condition
+            if any(player.hp <= 0 for player in self.players):
+                break
+
+            # Switch turn
+            self.current_turn = (self.current_turn + 1) % 2
+
+        print(f"{self.players[1 - self.current_turn].name} wins!")
+        log_action(f"{self.players[1 - self.current_turn].name} wins!")
+
+
+# Define the creatures and spells
+creatures = [
+    CreatureCard("Goblin", "Gain +1 Attack when another Goblin is played", 1, 1, 1),
+    CreatureCard("Quick Archer", "Can attack immediately when played (Haste)", 1, 2, 1),
+    CreatureCard("Knight Defender", "Taunt: Enemies must attack this unit first", 3, 3, 4),
+    CreatureCard("Mage Apprentice", "Battlecry: Deal 1 damage to any target", 3, 2, 2),
+    CreatureCard("Rogue Assassin", "Stealth: Cannot be targeted until it attacks", 4, 4, 2),
+    CreatureCard("Sorcerer Supreme", "While in play, all spells in hand are free", 7, 2, 2),
+    CreatureCard("Dragon", "Battlecry: Deal 2 damage to all other creatures", 6, 6, 6),
+    CreatureCard("Ancient Golem", "Massive creature", 7, 10, 10)
+]
+
+spells = [
+    SpellCard("Fireball", "Deal 5 damage to any target", 3, fireball),
+    SpellCard("Buff", "Give a creature +2/+2", 2, buff),
+    SpellCard("Curse", "Kill a creature instantly", 3, curse),
+    SpellCard("Draw +2", "Draw two cards", 2, lambda player, _: draw_cards(player, 2))
+]
+
+# Create Players and Game
+player1 = Player("Player 1")
+player2 = Player("Player 2")
+
+# Add creatures and spells to the decks
+for creature in creatures:
+    player1.deck.add(creature)
+    player2.deck.add(creature)
+for spell in spells:
+    player1.deck.add(spell)
+    player2.deck.add(spell)
+
+game = Game(player1, player2)
+game.start_game()
+
+# Display game log
+print("\nGame Log:")
+for entry in game_log:
+    print(entry)
