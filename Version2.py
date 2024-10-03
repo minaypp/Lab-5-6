@@ -2,44 +2,82 @@ import random
 import os
 import sys
 
-# Clear console function
+# Function to clear the console screen
 def clear_console():
     os.system('cls' if os.name == 'nt' else 'clear')
 
-# Base Card class
+# Base class for all cards
 class Card:
     def __init__(self, name, description, energy_cost):
+        """
+        Initialize a Card with a name, description, and energy cost.
+        """
         self.name = name
         self.description = description
         self.energy_cost = energy_cost
 
     def play(self, game, player, target):
+        """
+        Method to play the card. To be overridden by subclasses.
+        """
         pass
 
-# Creature Card subclass
+# Subclass for creature cards
 class CreatureCard(Card):
     def __init__(self, name, description, energy_cost, attack, health, abilities=None):
+        """
+        Initialize a CreatureCard with attack, health, and abilities.
+        """
         super().__init__(name, description, energy_cost)
         self.attack = attack
         self.health = health
         self.max_health = health
         self.abilities = abilities if abilities else []
-        self.can_attack = 'Haste' in self.abilities
-        self.is_taunt = 'Taunt' in self.abilities
-        self.is_stealth = 'Stealth' in self.abilities
-        self.owner = None
+        self.can_attack = 'Haste' in self.abilities  # Can attack immediately if it has 'Haste'
+        self.is_taunt = 'Taunt' in self.abilities    # Must be attacked first if it has 'Taunt'
+        self.is_stealth = 'Stealth' in self.abilities  # Cannot be targeted until it attacks
+        self.owner = None  # Will be set when the card is played
 
     def play(self, game, player, target=None):
+        """
+        Play the creature card by adding it to the battlefield.
+        """
         self.owner = player
         player.battlefield.append(self)
         game.turn_log.append(f"{player.name} played creature {self.name}.")
         game.game_log.append(f"{player.name} played creature {self.name}.")
+
+        # Handle Battlecry abilities
+        if 'Battlecry' in self.abilities:
+            if self.name == 'Mage Apprentice':
+                if target:
+                    if isinstance(target, CreatureCard) or isinstance(target, Player):
+                        target.take_damage(1, game)
+                    else:
+                        print("Invalid target.")
+                else:
+                    print("No target selected for Battlecry.")
+            elif self.name == 'Dragon':
+                for creature in self.owner.opponent.battlefield.copy():
+                    creature.take_damage(2, game)
+
+        # Handle Goblin's ability
+        if self.name == 'Goblin':
+            for creature in player.battlefield:
+                if creature.name == 'Goblin' and creature != self:
+                    creature.attack += 1
+                    game.turn_log.append(f"{creature.name} gains +1 Attack due to another Goblin.")
+                    game.game_log.append(f"{creature.name} gains +1 Attack due to another Goblin.")
+
         return True  # Indicate successful play
 
     def attack_target(self, game, target):
+        """
+        Attack a target (creature or player).
+        """
         game.turn_log.append(f"{self.owner.name}'s {self.name} attacks {target.name}.")
         game.game_log.append(f"{self.owner.name}'s {self.name} attacks {target.name}.")
-        self.can_attack = False
+        self.can_attack = False  # Creature cannot attack again this turn
         if isinstance(target, CreatureCard):
             target.take_damage(self.attack, game)
             if target.health > 0:
@@ -48,6 +86,9 @@ class CreatureCard(Card):
             target.take_damage(self.attack, game)
 
     def take_damage(self, amount, game):
+        """
+        Reduce the creature's health by the damage amount.
+        """
         self.health -= amount
         game.turn_log.append(f"{self.name} takes {amount} damage.")
         game.game_log.append(f"{self.name} takes {amount} damage.")
@@ -55,42 +96,63 @@ class CreatureCard(Card):
             self.die(game)
 
     def die(self, game):
+        """
+        Handle the creature's death.
+        """
         game.turn_log.append(f"{self.owner.name}'s {self.name} has died.")
         game.game_log.append(f"{self.owner.name}'s {self.name} has died.")
         self.owner.battlefield.remove(self)
 
-# Spell Card subclass
+# Subclass for spell cards
 class SpellCard(Card):
     def __init__(self, name, description, energy_cost, effect):
+        """
+        Initialize a SpellCard with a specific effect function.
+        """
         super().__init__(name, description, energy_cost)
         self.effect = effect
 
     def play(self, game, player, target=None):
+        """
+        Play the spell card by invoking its effect.
+        """
         success = self.effect(game, player, target)
         if success:
             game.turn_log.append(f"{player.name} casts spell {self.name}.")
             game.game_log.append(f"{player.name} casts spell {self.name}.")
         return success
 
-# Node class for LinkedList
+# Node class for the linked list implementation of hand and deck
 class Node:
     def __init__(self, card):
+        """
+        Initialize a Node with a card.
+        """
         self.card = card
         self.next = None
 
-# LinkedList class for deck and hand
+# LinkedList class to represent the player's hand and deck
 class LinkedList:
     def __init__(self):
+        """
+        Initialize an empty linked list.
+        """
         self.head = None
         self.size = 0
 
     def add(self, card):
+        """
+        Add a card to the beginning of the linked list.
+        """
         new_node = Node(card)
         new_node.next = self.head
         self.head = new_node
         self.size += 1
 
     def remove(self, card_name):
+        """
+        Remove a card by name from the linked list.
+        """
         current = self.head
         previous = None
         while current:
@@ -106,6 +168,9 @@ class LinkedList:
         return None  # Card not found
 
     def draw(self):
+        """
+        Draw (remove and return) the top card from the linked list.
+        """
         if self.head is None:
             return None
         card = self.head.card
@@ -114,6 +179,9 @@ class LinkedList:
         return card
 
     def to_list(self):
+        """
+        Convert the linked list to a regular Python list.
+        """
         current = self.head
         cards = []
         while current:
@@ -121,18 +189,30 @@ class LinkedList:
             current = current.next
         return cards
 
-# Hand class
+# Class representing the player's hand
 class Hand:
     def __init__(self):
+        """
+        Initialize an empty hand.
+        """
         self.cards = LinkedList()
 
     def add_card(self, card):
+        """
+        Add a card to the hand.
+        """
         self.cards.add(card)
 
     def remove_card(self, card_name):
+        """
+        Remove a card by name from the hand.
+        """
         return self.cards.remove(card_name)
 
     def display(self):
+        """
+        Display the cards in the hand.
+        """
         hand_cards = self.cards.to_list()
         print("\nYour hand:")
         for idx, card in enumerate(hand_cards):
@@ -141,14 +221,20 @@ class Hand:
             print("Your hand is empty.")
 
     def has_playable_card(self, energy):
+        """
+        Check if the player has any card that can be played with the current energy.
+        """
         for card in self.cards.to_list():
             if card.energy_cost <= energy:
                 return True
         return False
 
-# Player class
+# Class representing a player
 class Player:
     def __init__(self, name):
+        """
+        Initialize a player with a name, health, energy, hand, deck, battlefield, and discard pile.
+        """
         self.name = name
         self.hp = 20
         self.energy = 3
@@ -158,8 +244,12 @@ class Player:
         self.battlefield = []
         self.discard_pile = []
         self.has_drawn_initial_hand = False  # Track if initial hand is drawn
+        self.opponent = None  # Will be set during game setup
 
     def draw_card(self):
+        """
+        Draw a card from the deck into the hand.
+        """
         card = self.deck.draw()
         if card:
             self.hand.add_card(card)
@@ -170,47 +260,37 @@ class Player:
             print(f"{self.name} has no more cards to draw and loses the game!")
 
     def take_damage(self, amount, game):
+        """
+        Reduce the player's health by the damage amount.
+        """
         self.hp -= amount
         game.turn_log.append(f"{self.name} takes {amount} damage. HP is now {self.hp}.")
         game.game_log.append(f"{self.name} takes {amount} damage. HP is now {self.hp}.")
 
-    def play_card(self, card_name, game, target=None):
-        card = self.hand.remove_card(card_name)
-        if card:
-            # Check for Sorcerer Supreme effect
-            if any(c.name == 'Sorcerer Supreme' for c in self.battlefield) and isinstance(card, SpellCard):
-                energy_cost = 0
-            else:
-                energy_cost = card.energy_cost
-            if self.energy >= energy_cost:
-                # Attempt to play the card
-                success = card.play(game, self, target)
-                if success:
-                    self.energy -= energy_cost
-                    self.discard_pile.append(card)
-                else:
-                    # If card play failed, return card to hand
-                    self.hand.add_card(card)
-            else:
-                print("Not enough energy to play this card.")
-                self.hand.add_card(card)  # Return card to hand
-        else:
-            print("Card not found in hand.")
-
-# Game class
+# Class representing the game
 class Game:
     def __init__(self):
+        """
+        Initialize the game with players, turn logs, and game logs.
+        """
         self.players = []
         self.current_turn = 0
         self.turn_log = []  # Log for current turn
         self.game_log = []  # Log for entire game
 
     def start_game(self):
+        """
+        Start the game by setting up players and beginning the main game loop.
+        """
         clear_console()
         print("Welcome to the Python Card Game!")
         player1_name = input("Enter name for Player 1: ")
         player2_name = input("Enter name for Player 2: ")
-        self.players = [Player(player1_name), Player(player2_name)]
+        player1 = Player(player1_name)
+        player2 = Player(player2_name)
+        player1.opponent = player2
+        player2.opponent = player1
+        self.players = [player1, player2]
         self.setup_players()
         # Randomly select who goes first
         self.current_turn = random.randint(0, 1)
@@ -219,6 +299,9 @@ class Game:
         self.main_game_loop()
 
     def setup_players(self):
+        """
+        Set up the players by creating decks and shuffling them.
+        """
         for player in self.players:
             # Initialize decks with predefined cards
             deck_cards = self.create_deck()
@@ -227,7 +310,9 @@ class Game:
                 player.deck.add(card)
 
     def create_deck(self):
-        # Create deck with the specified cards
+        """
+        Create a deck with predefined cards.
+        """
         deck = []
         # Creature Cards
         for _ in range(4):
@@ -339,6 +424,9 @@ class Game:
 
     # Spell effects
     def fireball_effect(self, game, player, target):
+        """
+        Effect of the Fireball spell: deal 5 damage to any target.
+        """
         if isinstance(target, CreatureCard) or isinstance(target, Player):
             target.take_damage(5, game)
             return True
@@ -347,6 +435,9 @@ class Game:
             return False
 
     def buff_effect(self, game, player, target):
+        """
+        Effect of the Buff spell: give a creature +2/+2.
+        """
         if isinstance(target, CreatureCard):
             target.attack += 2
             target.health += 2
@@ -358,6 +449,9 @@ class Game:
             return False
 
     def curse_effect(self, game, player, target):
+        """
+        Effect of the Curse spell: kill a creature instantly.
+        """
         if isinstance(target, CreatureCard):
             target.take_damage(target.health, game)
             game.turn_log.append(f"{target.name} is killed instantly.")
@@ -368,6 +462,9 @@ class Game:
             return False
 
     def draw_four_effect(self, game, player, target):
+        """
+        Effect of the Draw +4 spell: target player draws four cards.
+        """
         if isinstance(target, Player):
             for _ in range(4):
                 target.draw_card()
@@ -377,6 +474,9 @@ class Game:
             return False
 
     def end_game_effect(self, game, player, target):
+        """
+        Effect of the End Game spell: deal 20 damage to any target.
+        """
         if isinstance(target, CreatureCard) or isinstance(target, Player):
             target.take_damage(20, game)
             return True
@@ -385,10 +485,13 @@ class Game:
             return False
 
     def main_game_loop(self):
+        """
+        The main game loop where players take turns until the game ends.
+        """
         game_over = False
         while not game_over:
             current_player = self.players[self.current_turn]
-            opponent = self.players[1 - self.current_turn]
+            opponent = current_player.opponent
             self.start_turn(current_player)
             if current_player.hp <= 0 or opponent.hp <= 0:
                 game_over = True
@@ -414,6 +517,9 @@ class Game:
             print(entry)
 
     def start_turn(self, player):
+        """
+        Start the player's turn by drawing a card and resetting energy and statuses.
+        """
         clear_console()
         print(f"{player.name}'s turn.")
         # Draw initial hand if not already done
@@ -448,6 +554,9 @@ class Game:
         self.display_battlefield()
 
     def player_turn(self, player, opponent):
+        """
+        Handle the player's actions during their turn.
+        """
         while True:
             print(f"\n{player.name}'s HP: {player.hp} | Energy: {player.energy}/{player.max_energy}")
             print(f"{opponent.name}'s HP: {opponent.hp}")
@@ -480,6 +589,9 @@ class Game:
                 print("Invalid choice. Please try again.")
 
     def play_card_action(self, player, opponent):
+        """
+        Handle the action of playing a card.
+        """
         if player.hand.cards.size == 0:
             print("You have no cards to play.")
             return
@@ -487,11 +599,8 @@ class Game:
             card_name = input("Enter the name of the card to play (or type 'cancel' to go back): ").strip()
             if card_name.lower() == 'cancel':
                 break
-            card_to_play = None
-            for card in player.hand.cards.to_list():
-                if card.name.lower() == card_name.lower():
-                    card_to_play = card
-                    break
+            # Remove the card from the player's hand
+            card_to_play = player.hand.remove_card(card_name)
             if card_to_play is None:
                 print("You don't have that card in your hand.")
                 continue
@@ -502,26 +611,42 @@ class Game:
                 energy_cost = card_to_play.energy_cost
             if player.energy < energy_cost:
                 print("Not enough energy to play that card.")
+                # Return the card to the hand
+                player.hand.add_card(card_to_play)
                 continue
             target = None
             if isinstance(card_to_play, CreatureCard):
-                success = card_to_play.play(self, player)
+                # For Battlecry abilities that require a target
+                if 'Battlecry' in card_to_play.abilities and card_to_play.name == 'Mage Apprentice':
+                    target = self.select_target(player, opponent)
+                    if target is None:
+                        print("No valid target selected.")
+                        # Return the card to the hand
+                        player.hand.add_card(card_to_play)
+                        continue
+                success = card_to_play.play(self, player, target)
                 if success:
                     player.energy -= energy_cost
-                    player.discard_pile.append(card_to_play)
+                    # Creature cards go to battlefield, not discard pile
                     break
                 else:
                     print("Failed to play the card.")
+                    # Return the card to the hand
+                    player.hand.add_card(card_to_play)
             elif isinstance(card_to_play, SpellCard):
                 if card_to_play.name not in ["Draw +4"]:
                     target = self.select_target(player, opponent)
                     if target is None:
                         print("No valid target selected.")
+                        # Return the card to the hand
+                        player.hand.add_card(card_to_play)
                         continue
                 else:
                     target = self.select_player(player, opponent)
                     if target is None:
                         print("No valid player selected.")
+                        # Return the card to the hand
+                        player.hand.add_card(card_to_play)
                         continue
                 success = card_to_play.play(self, player, target)
                 if success:
@@ -530,10 +655,17 @@ class Game:
                     break
                 else:
                     print("Failed to play the card.")
+                    # Return the card to the hand
+                    player.hand.add_card(card_to_play)
             else:
                 print("Invalid card type.")
+                # Return the card to the hand
+                player.hand.add_card(card_to_play)
 
     def select_target(self, player, opponent):
+        """
+        Allow the player to select a target for spells or abilities.
+        """
         while True:
             print("Select a target:")
             print("Opponent")
@@ -582,6 +714,9 @@ class Game:
                 print("Invalid choice.")
 
     def select_player(self, player, opponent):
+        """
+        Allow the player to select a player (self or opponent) as a target.
+        """
         while True:
             print("Select a player:")
             print(f"1. {player.name}")
@@ -597,6 +732,9 @@ class Game:
                 print("Invalid choice.")
 
     def attack_action(self, player, opponent):
+        """
+        Handle the action of attacking with creatures.
+        """
         if not player.battlefield:
             print("You have no creatures to attack with.")
             return
@@ -625,6 +763,9 @@ class Game:
                 print("Invalid input. Please enter a number.")
 
     def handle_attack(self, attacker, opponent):
+        """
+        Handle selecting a target for an attack.
+        """
         while True:
             taunt_creatures = [c for c in opponent.battlefield if c.is_taunt]
             if taunt_creatures:
@@ -678,6 +819,9 @@ class Game:
                     print("Invalid choice.")
 
     def end_turn(self, player):
+        """
+        End the player's turn by displaying the turn log and clearing it.
+        """
         print(f"{player.name}'s turn has ended.")
         print("\nTurn Log:")
         for entry in self.turn_log:
@@ -687,6 +831,9 @@ class Game:
         clear_console()
 
     def display_battlefield(self):
+        """
+        Display the current state of the battlefield.
+        """
         print("\nBattlefield:")
         for p in self.players:
             print(f"{p.name}'s creatures:")
@@ -699,6 +846,9 @@ class Game:
         print("")
 
     def display_log(self):
+        """
+        Display the game log.
+        """
         print("Game Log:")
         for entry in self.game_log:
             print(entry)
