@@ -1,3 +1,18 @@
+'''
+CIST 005B Fall 2024
+Lab Week 5/6
+Description: A card game featuring energy, creatures, and spells (similar to Hearthstone)
+Input: y/n or h/s
+Output: A game and the results of the game
+Student: Chris Amey and Mina Yeap
+Known bugs: None
+Date: 10/7/2024
+'''
+
+################################################################
+###   This program was made with the help of AI (ChatGPT) ######
+################################################################
+
 import random
 import os
 import sys
