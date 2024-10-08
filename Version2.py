@@ -40,18 +40,24 @@ class CreatureCard(Card):
             if self.name == 'Mage Apprentice':
                 if target:
                     if isinstance(target, CreatureCard) or isinstance(target, Player):
+                        if target.is_stealth:
+                            print(f"{target.name} cannot be targeted due to Stealth.")
+                            return False
                         target.take_damage(1, game)
                         game.turn_log.append(f"{self.name} deals 1 damage to {target.name} with Battlecry.")
                         game.game_log.append(f"{self.name} deals 1 damage to {target.name} with Battlecry.")
                     else:
                         print("Invalid target.")
+                        return False
                 else:
                     print("No target selected for Battlecry.")
+                    return False
             elif self.name == 'Dragon':
                 for creature in self.owner.opponent.battlefield.copy():
-                    creature.take_damage(2, game)
-                    game.turn_log.append(f"{self.name} deals 2 damage to {creature.name} with Battlecry.")
-                    game.game_log.append(f"{self.name} deals 2 damage to {creature.name} with Battlecry.")
+                    if not creature.is_stealth:
+                        creature.take_damage(2, game)
+                        game.turn_log.append(f"{self.name} deals 2 damage to {creature.name} with Battlecry.")
+                        game.game_log.append(f"{self.name} deals 2 damage to {creature.name} with Battlecry.")
 
         # Handle Goblin's ability
         if self.name == 'Goblin':
@@ -165,9 +171,9 @@ class Hand:
     def remove_card(self, card_name):
         return self.cards.remove(card_name)
 
-    def display(self):
+    def display(self, player):
         hand_cards = self.cards.to_list()
-        print("\nYour hand:")
+        print(f"\nYour hand (Energy: {player.energy}/{player.max_energy}, Deck: {player.deck.size} cards left):")
         for idx, card in enumerate(hand_cards):
             print(f"{idx + 1}. {card.name} (Cost: {card.energy_cost}) - {card.description}")
         if not hand_cards:
@@ -480,7 +486,7 @@ class Game:
             print(f"\n{player.name}'s HP: {player.hp} | Energy: {player.energy}/{player.max_energy}")
             print(f"{opponent.name}'s HP: {opponent.hp}")
             self.display_battlefield()
-            player.hand.display()
+            player.hand.display(player)
             print("\nChoose an action:")
             print("1. Play a card")
             print("2. Attack")
@@ -525,7 +531,7 @@ class Game:
             return
         while True:
             hand_cards = player.hand.cards.to_list()
-            print("\nYour hand:")
+            print(f"\nYour hand (Energy: {player.energy}/{player.max_energy}, Deck: {player.deck.size} cards left):")
             for idx, card in enumerate(hand_cards):
                 print(f"{idx + 1}. {card.name} (Cost: {card.energy_cost}) - {card.description}")
             card_input = input("Enter the number or name of the card to play (or 'cancel' to go back): ").strip()
@@ -627,25 +633,26 @@ class Game:
                 else:
                     print("Opponent has no targetable creatures.")
             elif choice in ['3', 'my creatures']:
-                if player.battlefield:
-                    for idx, creature in enumerate(player.battlefield):
+                available_creatures = [c for c in player.battlefield if not c.is_stealth]
+                if available_creatures:
+                    for idx, creature in enumerate(available_creatures):
                         print(f"{idx + 1}. {creature.name} ({creature.attack}/{creature.health})")
                     idx = input("Enter the number or name of the creature (or 'cancel' to go back): ").strip()
                     if idx.lower() == 'cancel':
                         continue
                     if idx.isdigit():
                         idx = int(idx) - 1
-                        if 0 <= idx < len(player.battlefield):
-                            return player.battlefield[idx]
+                        if 0 <= idx < len(available_creatures):
+                            return available_creatures[idx]
                         else:
                             print("Invalid selection.")
                     else:
-                        for creature in player.battlefield:
+                        for creature in available_creatures:
                             if creature.name.lower() == idx.lower():
                                 return creature
                         print("Invalid selection.")
                 else:
-                    print("You have no creatures.")
+                    print("You have no targetable creatures.")
             else:
                 print("Invalid choice.")
 
@@ -694,21 +701,14 @@ class Game:
                 if attacker is None:
                     print("Invalid selection.")
                     continue
-            if opponent.battlefield:
-                self.handle_attack(attacker, opponent)
-            else:
-                attacker.attack_target(self, opponent)
+            self.handle_attack(attacker, opponent)
             break  # After attack, break out of the loop
 
     def handle_attack(self, attacker, opponent):
-        while True:
-            taunt_creatures = [c for c in opponent.battlefield if c.is_taunt]
-            if taunt_creatures:
-                print("Opponent has Taunt creatures. You must attack them first.")
-                available_creatures = [c for c in taunt_creatures if not c.is_stealth]
-            else:
-                available_creatures = [c for c in opponent.battlefield if not c.is_stealth]
-
+        taunt_creatures = [c for c in opponent.battlefield if c.is_taunt and not c.is_stealth]
+        if taunt_creatures:
+            print("Opponent has Taunt creatures. You must attack them first.")
+            available_creatures = taunt_creatures
             if available_creatures:
                 for idx, creature in enumerate(available_creatures):
                     print(f"{idx + 1}. {creature.name} ({creature.attack}/{creature.health})")
@@ -735,11 +735,51 @@ class Game:
                     else:
                         print("Invalid selection.")
             else:
-                if taunt_creatures:
-                    print("All Taunt creatures have Stealth and cannot be targeted.")
-                else:
-                    print("No available targets to attack.")
+                print("All Taunt creatures have Stealth and cannot be targeted.")
                 return
+        else:
+            # Allow attacking opponent or opponent's creatures
+            while True:
+                print("Select target:")
+                print("1. Opponent")
+                print("2. Opponent's creatures")
+                target_choice = input("Enter the number or name of your choice (or 'cancel' to go back): ").strip().lower()
+                if target_choice == 'cancel':
+                    return
+                if target_choice in ['1', 'opponent']:
+                    attacker.attack_target(self, opponent)
+                    return
+                elif target_choice in ['2', "opponent's creatures"]:
+                    available_creatures = [c for c in opponent.battlefield if not c.is_stealth]
+                    if available_creatures:
+                        for idx, creature in enumerate(available_creatures):
+                            print(f"{idx + 1}. {creature.name} ({creature.attack}/{creature.health})")
+                        choice = input("Enter the number or name of the creature to attack (or 'cancel' to go back): ").strip()
+                        if choice.lower() == 'cancel':
+                            continue
+                        if choice.isdigit():
+                            target_idx = int(choice) - 1
+                            if 0 <= target_idx < len(available_creatures):
+                                target = available_creatures[target_idx]
+                                attacker.attack_target(self, target)
+                                return
+                            else:
+                                print("Invalid selection.")
+                        else:
+                            target = None
+                            for creature in available_creatures:
+                                if creature.name.lower() == choice.lower():
+                                    target = creature
+                                    break
+                            if target:
+                                attacker.attack_target(self, target)
+                                return
+                            else:
+                                print("Invalid selection.")
+                    else:
+                        print("Opponent has no targetable creatures.")
+                else:
+                    print("Invalid choice.")
 
     def end_turn(self, player):
         print(f"{player.name}'s turn has ended.")
