@@ -2,11 +2,11 @@ import random
 import os
 import sys
 
-# Function to clear the console screen
+# clears console
 def clear_console():
     os.system('cls' if os.name == 'nt' else 'clear')
 
-# Base class for all cards
+# Base class for all creature card and spell card to inherit from
 class Card:
     def __init__(self, name, description, energy_cost):
         self.name = name
