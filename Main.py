@@ -198,7 +198,7 @@ class Player:
         self.discard_pile = []
         self.has_drawn_initial_hand = False
         self.opponent = None
-
+        self.is_stealth = False
     def draw_card(self):
         card = self.deck.draw()
         if card:
