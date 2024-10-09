@@ -1,6 +1,21 @@
+'''
+CIST 005B Fall 2024
+Lab Week 5/6
+Description: A card game featuring energy, creatures, and spells (similar to Hearthstone)
+Input: Two names, then a number option or a name of the action
+Output: A game and the results of the game
+Student: Chris Amey and Mina Yeap
+Known bugs: None
+Date: 10/8/2024
+'''
+
+################################################################
+###   This program was made with the help of AI (ChatGPT) ######
+################################################################
+
+
 import random  # For random number generation (e.g., deciding which player goes first)
 import os      # For interacting with the operating system (e.g., clearing the console)
-import sys     # Imported but not used in this code
 
 # Function to clear the console screen
 def clear_console():
